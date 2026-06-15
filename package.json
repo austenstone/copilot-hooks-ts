@@ -1,0 +1,63 @@
+{
+  "name": "copilot-hooks-ts",
+  "version": "0.1.0",
+  "description": "Type-safe GitHub Copilot CLI hooks. Parse the stdin payload, build the decision, read the transcript — all typed against @github/copilot-sdk.",
+  "type": "module",
+  "license": "MIT",
+  "author": {
+    "name": "Austen Stone",
+    "url": "https://github.com/austenstone"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/austenstone/copilot-hooks-ts.git"
+  },
+  "keywords": [
+    "github-copilot",
+    "copilot-cli",
+    "hooks",
+    "agentStop",
+    "preToolUse",
+    "typescript",
+    "zod"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "peerDependencies": {
+    "@github/copilot-sdk": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@github/copilot-sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@github/copilot-sdk": "^1.0.1",
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
