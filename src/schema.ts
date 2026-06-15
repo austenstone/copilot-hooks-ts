@@ -47,7 +47,9 @@ export const postToolUseSchema = z.object({
 export const postToolUseFailureSchema = z.object({
   ...baseShape,
   toolName: z.string(),
-  toolArgs: z.string(),
+  // The documented contract only guarantees toolName + error here; keep
+  // toolArgs optional so a failure payload that omits it still parses.
+  toolArgs: z.string().optional(),
   error: z.string(),
 });
 
@@ -70,13 +72,19 @@ type WithEvent<E extends HookEventName, S extends z.ZodType> = z.infer<S> & {
   event: E;
 };
 
-export type SessionStartInput = WithEvent<"sessionStart", typeof sessionStartSchema>;
+export type SessionStartInput = WithEvent<
+  "sessionStart",
+  typeof sessionStartSchema
+>;
 export type UserPromptSubmittedInput = WithEvent<
   "userPromptSubmitted",
   typeof userPromptSubmittedSchema
 >;
 export type PreToolUseInput = WithEvent<"preToolUse", typeof preToolUseSchema>;
-export type PostToolUseInput = WithEvent<"postToolUse", typeof postToolUseSchema>;
+export type PostToolUseInput = WithEvent<
+  "postToolUse",
+  typeof postToolUseSchema
+>;
 export type PostToolUseFailureInput = WithEvent<
   "postToolUseFailure",
   typeof postToolUseFailureSchema
@@ -91,6 +99,9 @@ export type HookInput =
   | PostToolUseFailureInput
   | AgentStopInput;
 
-export type HookInputFor<E extends HookEventName> = Extract<HookInput, { event: E }>;
+export type HookInputFor<E extends HookEventName> = Extract<
+  HookInput,
+  { event: E }
+>;
 
 export type ToolResult = z.infer<typeof toolResultSchema>;

@@ -1,12 +1,17 @@
 import { Readable, Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { runHooks, blockStop } from "../src/index.js";
+import { blockStop, runHooks } from "../src/index.js";
 
 function stdinFrom(payload: object): NodeJS.ReadStream {
-  return Readable.from([JSON.stringify(payload)]) as unknown as NodeJS.ReadStream;
+  return Readable.from([
+    JSON.stringify(payload),
+  ]) as unknown as NodeJS.ReadStream;
 }
 
-function captureStdout(): { stream: NodeJS.WriteStream; written: () => string } {
+function captureStdout(): {
+  stream: NodeJS.WriteStream;
+  written: () => string;
+} {
   let buf = "";
   const stream = new Writable({
     write(chunk, _enc, cb) {
@@ -14,7 +19,10 @@ function captureStdout(): { stream: NodeJS.WriteStream; written: () => string } 
       cb();
     },
   });
-  return { stream: stream as unknown as NodeJS.WriteStream, written: () => buf };
+  return {
+    stream: stream as unknown as NodeJS.WriteStream,
+    written: () => buf,
+  };
 }
 
 const base = { sessionId: "s1", timestamp: 1, cwd: "/repo" };
@@ -30,7 +38,11 @@ describe("runHooks", () => {
         },
       },
       {
-        stream: stdinFrom({ ...base, stopReason: "done", transcriptPath: "/t" }),
+        stream: stdinFrom({
+          ...base,
+          stopReason: "done",
+          transcriptPath: "/t",
+        }),
         out: out.stream,
       },
     );
@@ -45,7 +57,11 @@ describe("runHooks", () => {
     await runHooks(
       { agentStop: () => undefined },
       {
-        stream: stdinFrom({ ...base, stopReason: "done", transcriptPath: "/t" }),
+        stream: stdinFrom({
+          ...base,
+          stopReason: "done",
+          transcriptPath: "/t",
+        }),
         out: out.stream,
       },
     );

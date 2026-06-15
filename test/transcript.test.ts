@@ -3,10 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  loadTranscript,
   joinToolCalls,
-  successfulToolCalls,
+  loadTranscript,
   skillNames,
+  successfulToolCalls,
 } from "../src/index.js";
 
 const lines = [
@@ -27,7 +27,10 @@ const lines = [
     type: "tool.execution_complete",
     data: { toolCallId: "c2", success: false, error: "nope" },
   },
-  { type: "skill.invoked", data: { name: "heartbeat", content: "", path: "/h" } },
+  {
+    type: "skill.invoked",
+    data: { name: "heartbeat", content: "", path: "/h" },
+  },
 ];
 
 function fixture(): string {
@@ -35,7 +38,7 @@ function fixture(): string {
   const path = join(dir, "events.jsonl");
   writeFileSync(
     path,
-    lines.map((l) => JSON.stringify(l)).join("\n") + "\n\n", // trailing blank line
+    `${lines.map((l) => JSON.stringify(l)).join("\n")}\n\n`, // trailing blank line
     "utf8",
   );
   return path;

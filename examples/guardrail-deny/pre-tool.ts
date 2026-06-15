@@ -5,7 +5,7 @@
 // blocks the tool. Here we block any shell command that would touch the .env
 // file or run a force push.
 
-import { runHooks, denyTool, parseToolArgs } from "copilot-hooks-ts";
+import { denyTool, parseToolArgs, runHooks } from "copilot-hooks-ts";
 
 const BLOCKED = [/\.env\b/, /git\s+push\s+.*--force/, /rm\s+-rf\s+\//];
 

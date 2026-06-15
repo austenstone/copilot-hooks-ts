@@ -15,11 +15,11 @@
 // (compile first, or run via a loader / tsx; see README.)
 
 import {
-  runHooks,
   blockStop,
   loadTranscript,
-  successfulToolCalls,
+  runHooks,
   skillNames,
+  successfulToolCalls,
   type ToolCall,
 } from "copilot-hooks-ts";
 
@@ -53,9 +53,7 @@ runHooks(
 
       // Only gate heartbeat sessions. The heartbeat skill being invoked is the
       // signal this is a coverage run and not some unrelated task.
-      const isHeartbeat = skillNames(events).some((n) =>
-        /heartbeat/i.test(n),
-      );
+      const isHeartbeat = skillNames(events).some((n) => /heartbeat/i.test(n));
       if (!isHeartbeat) return;
 
       // Escape valve: if we've already blocked MAX_BLOCKS times, stop nagging.

@@ -5,7 +5,7 @@
 // turn). Here we add the current git branch + a house rule on each prompt.
 
 import { execSync } from "node:child_process";
-import { runHooks, injectContext } from "copilot-hooks-ts";
+import { injectContext, runHooks } from "copilot-hooks-ts";
 
 function gitBranch(cwd: string): string | undefined {
   try {

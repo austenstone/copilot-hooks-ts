@@ -38,8 +38,13 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
+    "typecheck:examples": "tsc -p examples/tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "lint:fix": "biome check --write .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
@@ -54,8 +59,10 @@
     }
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.0",
     "@github/copilot-sdk": "^1.0.1",
     "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "2.1.9",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

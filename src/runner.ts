@@ -3,9 +3,15 @@ import { readHookInput } from "./input.js";
 import { emit, type HookOutput } from "./output.js";
 import type { HookInput, HookInputFor } from "./schema.js";
 
+/**
+ * What a handler may return: a decision object to emit, or nothing
+ * (null/undefined/void) to allow / no-op. May be sync or async.
+ */
+export type HookResult = HookOutput | null | undefined | void;
+
 export type HookHandler<E extends HookEventName> = (
   input: HookInputFor<E>,
-) => HookOutput | null | undefined | void | Promise<HookOutput | null | undefined | void>;
+) => HookResult | Promise<HookResult>;
 
 export type HookHandlers = {
   [E in HookEventName]?: HookHandler<E>;

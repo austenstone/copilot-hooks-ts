@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  injectContext,
   allowTool,
-  denyTool,
   askTool,
   blockStop,
+  denyTool,
+  injectContext,
 } from "../src/index.js";
 
 describe("output builders", () => {

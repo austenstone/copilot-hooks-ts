@@ -1,0 +1,33 @@
+name: Release
+
+# Publishes to npm when a GitHub Release is published. Requires either an
+# NPM_TOKEN secret or a configured npm trusted publisher. `id-token: write`
+# enables build provenance attestation on the published package.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        # caching intentionally disabled on the publish job (no `cache:` key)
+        # zizmor: ignore[cache-poisoning]
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm test
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

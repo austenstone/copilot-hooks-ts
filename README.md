@@ -1,5 +1,8 @@
 # copilot-hooks-ts
 
+[![CI](https://github.com/austenstone/copilot-hooks-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/austenstone/copilot-hooks-ts/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/copilot-hooks-ts.svg)](https://www.npmjs.com/package/copilot-hooks-ts)
+
 Type-safe authoring for **GitHub Copilot CLI hooks**. Parse the stdin payload,
 build a decision, and read the session transcript — all fully typed, anchored to
 the real CLI subprocess wire format and `@github/copilot-sdk`'s generated event

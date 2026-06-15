@@ -1,4 +1,4 @@
-import { toPascalEvent, type HookEventName } from "./events.js";
+import { type HookEventName, toPascalEvent } from "./events.js";
 
 export type HookOutput = Record<string, unknown>;
 

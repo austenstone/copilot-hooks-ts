@@ -1,5 +1,5 @@
 import { inferEventName } from "./events.js";
-import { schemaByEvent, type HookInput } from "./schema.js";
+import { type HookInput, schemaByEvent } from "./schema.js";
 
 export class HookParseError extends Error {
   override name = "HookParseError";
@@ -29,9 +29,7 @@ export function parseHookInput(raw: string | object): HookInput {
 
   const event = inferEventName(payload as Record<string, unknown>);
   if (!event) {
-    throw new HookParseError(
-      "could not infer hook event from payload keys",
-    );
+    throw new HookParseError("could not infer hook event from payload keys");
   }
 
   const result = schemaByEvent[event].safeParse(payload);

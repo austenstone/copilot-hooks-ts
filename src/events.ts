@@ -49,12 +49,13 @@ function normalizeEventName(raw: string): HookEventName | undefined {
 export function inferEventName(
   payload: Record<string, unknown>,
 ): HookEventName | undefined {
-  const explicit = payload["hookEventName"];
+  const explicit = payload.hookEventName;
   if (typeof explicit === "string") {
     const normalized = normalizeEventName(explicit);
     if (normalized) return normalized;
   }
-  if ("stopReason" in payload || "transcriptPath" in payload) return "agentStop";
+  if ("stopReason" in payload || "transcriptPath" in payload)
+    return "agentStop";
   if ("toolName" in payload) {
     if ("error" in payload) return "postToolUseFailure";
     if ("toolResult" in payload) return "postToolUse";

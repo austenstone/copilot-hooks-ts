@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  parseHookInput,
-  parseToolArgs,
   HookParseError,
   inferEventName,
+  parseHookInput,
+  parseToolArgs,
 } from "../src/index.js";
 
 describe("inferEventName", () => {
@@ -12,7 +12,9 @@ describe("inferEventName", () => {
       "sessionStart",
     );
     expect(inferEventName({ prompt: "do thing" })).toBe("userPromptSubmitted");
-    expect(inferEventName({ toolName: "x", toolArgs: "{}" })).toBe("preToolUse");
+    expect(inferEventName({ toolName: "x", toolArgs: "{}" })).toBe(
+      "preToolUse",
+    );
     expect(
       inferEventName({ toolName: "x", toolArgs: "{}", toolResult: {} }),
     ).toBe("postToolUse");
