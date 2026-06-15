@@ -1,7 +1,7 @@
 {
   "name": "copilot-hooks-ts",
   "version": "0.1.0",
-  "description": "Type-safe GitHub Copilot CLI hooks. Parse the stdin payload, build the decision, read the transcript — all typed against @github/copilot-sdk.",
+  "description": "Type-safe GitHub Copilot CLI hooks. Parse the stdin payload, build the decision, read the transcript. Typed against @github/copilot-sdk.",
   "type": "module",
   "license": "MIT",
   "author": {
