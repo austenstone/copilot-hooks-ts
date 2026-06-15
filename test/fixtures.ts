@@ -97,3 +97,20 @@ export const compatPostToolUse = {
   tool_input: { command: "ls" },
   tool_result: { result_type: "success", text_result_for_llm: "a\nb" },
 };
+
+export const nativePreMcpToolCall = {
+  sessionId: "s1",
+  timestamp: 1739550000000,
+  cwd: "/repo",
+  serverName: "deepwiki",
+  toolName: "mcp__deepwiki__ask_question",
+  arguments: { question: "how?", repoName: "owner/repo" },
+};
+
+export const nativeViewToolUse = {
+  sessionId: "s1",
+  timestamp: 1739550000000,
+  cwd: "/repo",
+  toolName: "view",
+  toolArgs: '{"path":"/repo/src/index.ts","view_range":[1,20]}',
+};

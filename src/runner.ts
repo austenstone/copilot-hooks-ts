@@ -2,6 +2,9 @@ import { FAIL_CLOSED_EVENTS, type HookEventName } from "./events.js";
 import { readHookInput } from "./input.js";
 import { denyPermission, denyTool, emit, type HookOutput } from "./output.js";
 import type { HookInput, HookInputFor } from "./schema.js";
+import { onTool, type ToolEvent, type ToolHandlerMap } from "./tools.js";
+
+type Awaitable<T> = T | Promise<T>;
 
 /**
  * What a handler may return: a decision object to emit, or nothing
@@ -13,8 +16,15 @@ export type HookHandler<E extends HookEventName> = (
   input: HookInputFor<E>,
 ) => HookResult | Promise<HookResult>;
 
+/**
+ * A handler for each event. Tool events (preToolUse, postToolUse,
+ * postToolUseFailure, preMcpToolCall, permissionRequest) also accept a
+ * tool-scoped map (`{ bash: ..., default: ... }`) instead of a plain handler.
+ */
 export type HookHandlers = {
-  [E in HookEventName]?: HookHandler<E>;
+  [E in HookEventName]?: E extends ToolEvent
+    ? HookHandler<E> | ToolHandlerMap<E>
+    : HookHandler<E>;
 };
 
 export interface RunHooksOptions {
@@ -33,6 +43,12 @@ export interface RunHooksOptions {
    * silently allow the action. Set false to fail open (emit nothing).
    */
   failClosed?: boolean;
+  /**
+   * Gate the whole run. Evaluated before stdin is read; if it resolves false,
+   * nothing is parsed or emitted (an allow / no-op). Handy for cheap
+   * environment checks like `() => process.platform === "darwin"`.
+   */
+  shouldRun?: boolean | (() => Awaitable<boolean>);
   /** Override how the process exit code is set (defaults to process.exitCode). */
   setExitCode?: (code: number) => void;
 }
@@ -69,6 +85,12 @@ export async function runHooks(
       process.exitCode = code;
     });
 
+  const proceed =
+    typeof options.shouldRun === "function"
+      ? await options.shouldRun()
+      : (options.shouldRun ?? true);
+  if (!proceed) return;
+
   let input: HookInput;
   try {
     input = await readHookInput(options.stream ?? process.stdin);
@@ -80,10 +102,13 @@ export async function runHooks(
     return;
   }
 
-  const handler = handlers[input.event] as
-    | ((i: HookInput) => ReturnType<HookHandler<HookEventName>>)
-    | undefined;
-  if (!handler) return;
+  const registered = handlers[input.event];
+  if (!registered) return;
+  const handler = (
+    typeof registered === "function"
+      ? registered
+      : onTool(registered as ToolHandlerMap<ToolEvent>)
+  ) as (i: HookInput) => ReturnType<HookHandler<HookEventName>>;
 
   try {
     const output = await handler(input);

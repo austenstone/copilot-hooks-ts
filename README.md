@@ -48,16 +48,17 @@ This library encodes all of that so you don't rediscover it.
 
 ```ts
 // my-hook.ts
-import { runHooks, denyTool, injectContext, parseToolArgs } from "copilot-hooks-ts";
+import { runHooks, denyTool, injectContext } from "copilot-hooks-ts";
 
 runHooks({
   userPromptSubmitted(input) {
     return injectContext(`cwd is ${input.cwd}`);
   },
-  preToolUse(input) {
-    if (input.toolName !== "bash") return; // allow
-    const { command } = parseToolArgs<{ command: string }>(input) ?? {};
-    if (command?.includes(".env")) return denyTool("no touching .env");
+  preToolUse: {
+    // keyed by tool name — `toolInput` is typed to the shell input shape
+    bash({ toolInput }) {
+      if (toolInput.command?.includes(".env")) return denyTool("no touching .env");
+    },
   },
 });
 ```
@@ -100,6 +101,68 @@ Each handler receives a fully-typed, discriminated input (`input.event` narrows
 the shape; `input.dialect` tells you `"native"` vs `"vscode"`).
 `parseToolArgs(input)` decodes the JSON-encoded `toolArgs` for you.
 
+## Tool-scoped hooks
+
+The five tool events — `preToolUse`, `postToolUse`, `postToolUseFailure`,
+`preMcpToolCall`, `permissionRequest` — accept a **map keyed by tool name**
+instead of a single handler. The matched key narrows `input.toolInput` to that
+tool's input shape, and `default` catches anything unlisted:
+
+```ts
+runHooks({
+  preToolUse: {
+    bash({ toolInput }) {
+      // toolInput: { command: string; description?: string; ... }
+      if (toolInput.command.includes("rm -rf /")) return denyTool("nope");
+    },
+    view({ toolInput }) {
+      // toolInput: { path: string; view_range?: number[] }
+    },
+    default({ toolName }) {
+      // every other tool
+    },
+  },
+});
+```
+
+No matching key and no `default` is a no-op (allow). Built-in shapes ship for
+`bash` / `powershell` / `local_shell`, `view`, `create`, `edit`,
+`str_replace_editor`, `glob`, and `grep`. Need it standalone (outside
+`runHooks`)? Use `onTool<"preToolUse">({ ... })`, which returns a plain event
+handler.
+
+### Typing your own / MCP tools
+
+`ToolSchema` is an augmentable interface — add your tools (MCP tools arrive as
+`mcp__<server>__<tool>`) with declaration merging and they become typed keys:
+
+```ts
+declare module "copilot-hooks-ts" {
+  interface ToolSchema {
+    "mcp__deepwiki__ask_question": {
+      input: { question: string; repoName: string };
+    };
+  }
+}
+
+runHooks({
+  preMcpToolCall: {
+    mcp__deepwiki__ask_question({ toolInput }) {
+      // toolInput: { question: string; repoName: string }
+    },
+  },
+});
+```
+
+## Gating with `shouldRun`
+
+Pass `shouldRun` to skip a run entirely before stdin is even read — handy for
+cheap environment checks. `false` emits nothing (an allow / no-op):
+
+```ts
+runHooks(handlers, { shouldRun: () => process.platform === "darwin" });
+```
+
 ## Reading the transcript
 
 `agentStop` payloads include `transcriptPath` — the session's `events.jsonl`,
@@ -122,6 +185,10 @@ required source — deriving everything from the transcript, no state file.
 ## API
 
 - **Input**: `runHooks`, `readHookInput`, `parseHookInput`, `parseToolArgs`, `HookParseError`
+- **Tool-scoped**: `onTool`, plus the augmentable `ToolSchema` and types
+  `ToolName`, `ToolInputOf<Name>`, `ToolScopedInput<E, Name>`, `ToolHandlerMap<E>`,
+  `ToolEvent`, and built-in input shapes (`ShellInput`, `ViewInput`, `CreateInput`,
+  `StrReplaceInput`, `InsertInput`, `GlobInput`, `GrepInput`)
 - **Output (flat, dialect-agnostic)**: `injectContext`, `allowTool`, `denyTool`,
   `askTool`, `modifyToolArgs`, `setMcpMeta`, `blockPrompt`, `modifyPrompt`,
   `respond`, `blockToolResult`, `modifyToolResult`, `continueAgent`,

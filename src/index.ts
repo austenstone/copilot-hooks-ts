@@ -78,6 +78,25 @@ export type {
   UserPromptSubmittedInput,
 } from "./schema.js";
 export { nativeSchemaByEvent } from "./schema.js";
+export type {
+  CreateInput,
+  GlobInput,
+  GrepInput,
+  InsertInput,
+  ShellInput,
+  StrReplaceInput,
+  ToolEvent,
+  ToolEventInput,
+  ToolHandler,
+  ToolHandlerMap,
+  ToolInputOf,
+  ToolName,
+  ToolSchema,
+  ToolScopedInput,
+  ViewInput,
+} from "./tools.js";
+// Tool-scoped hooks + augmentable tool schema
+export { onTool } from "./tools.js";
 export type { ToolCall } from "./transcript.js";
 // Transcript reading (events.jsonl)
 export {
