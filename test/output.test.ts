@@ -1,58 +1,92 @@
 import { describe, expect, it } from "vitest";
 import {
+  allowPermission,
   allowTool,
   askTool,
-  blockStop,
+  blockPrompt,
+  blockToolResult,
+  continueAgent,
+  denyPermission,
   denyTool,
   injectContext,
+  modifyPrompt,
+  modifyToolArgs,
+  modifyToolResult,
+  respond,
+  setMcpMeta,
+  suppressOutput,
 } from "../src/index.js";
 
-describe("output builders", () => {
-  it("injectContext keys by PascalCase event name", () => {
-    expect(injectContext("ctx", "sessionStart")).toEqual({
-      hookSpecificOutput: {
-        hookEventName: "SessionStart",
-        additionalContext: "ctx",
-      },
-    });
-    expect(injectContext("ctx", "userPromptSubmitted")).toEqual({
-      hookSpecificOutput: {
-        hookEventName: "UserPromptSubmitted",
-        additionalContext: "ctx",
-      },
-    });
+describe("output builders are flat (no hookSpecificOutput wrapper)", () => {
+  it("injectContext is dialect-agnostic", () => {
+    expect(injectContext("ctx")).toEqual({ additionalContext: "ctx" });
   });
 
-  it("allowTool/askTool omit reason when not given", () => {
-    expect(allowTool()).toEqual({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "allow",
-      },
+  it("preToolUse permission decisions are top-level", () => {
+    expect(allowTool()).toEqual({ permissionDecision: "allow" });
+    expect(allowTool("trusted")).toEqual({
+      permissionDecision: "allow",
+      permissionDecisionReason: "trusted",
+    });
+    expect(denyTool("no secrets")).toEqual({
+      permissionDecision: "deny",
+      permissionDecisionReason: "no secrets",
     });
     expect(askTool("hmm")).toEqual({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "ask",
-        permissionDecisionReason: "hmm",
-      },
+      permissionDecision: "ask",
+      permissionDecisionReason: "hmm",
     });
   });
 
-  it("denyTool always includes the reason", () => {
-    expect(denyTool("no secrets")).toEqual({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: "no secrets",
-      },
+  it("modifyToolArgs / modifyToolResult", () => {
+    expect(modifyToolArgs({ command: "ls -a" })).toEqual({
+      modifiedArgs: { command: "ls -a" },
+    });
+    expect(modifyToolResult("scrubbed")).toEqual({
+      modifiedResult: "scrubbed",
     });
   });
 
-  it("blockStop uses the distinct top-level shape", () => {
-    expect(blockStop("keep going")).toEqual({
+  it("setMcpMeta accepts an object or null", () => {
+    expect(setMcpMeta({ trace: "x" })).toEqual({ metaToUse: { trace: "x" } });
+    expect(setMcpMeta(null)).toEqual({ metaToUse: null });
+  });
+
+  it("userPromptSubmitted builders", () => {
+    expect(blockPrompt("nope")).toEqual({ decision: "block", reason: "nope" });
+    expect(modifyPrompt("better")).toEqual({ modifiedPrompt: "better" });
+    expect(respond("answer", "router")).toEqual({
+      handled: true,
+      responseContent: "answer",
+      handledBy: "router",
+    });
+    expect(respond("answer")).toEqual({
+      handled: true,
+      responseContent: "answer",
+    });
+  });
+
+  it("postToolUse + agentStop block decisions", () => {
+    expect(blockToolResult("redacted")).toEqual({
+      decision: "block",
+      reason: "redacted",
+    });
+    expect(continueAgent("keep going")).toEqual({
       decision: "block",
       reason: "keep going",
     });
+  });
+
+  it("permissionRequest behaviors", () => {
+    expect(allowPermission()).toEqual({ behavior: "allow" });
+    expect(denyPermission("blocked", { interrupt: true })).toEqual({
+      behavior: "deny",
+      message: "blocked",
+      interrupt: true,
+    });
+  });
+
+  it("suppressOutput", () => {
+    expect(suppressOutput()).toEqual({ suppressOutput: true });
   });
 });

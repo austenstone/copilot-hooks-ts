@@ -1,0 +1,3 @@
+{
+  "preToolUse": [{ "command": "npx tsx examples/guardrail-deny/pre-tool.ts" }]
+}

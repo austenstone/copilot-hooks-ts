@@ -1,0 +1,5 @@
+{
+  "UserPromptSubmit": [
+    { "command": "npx tsx examples/context-injection/user-prompt.ts" }
+  ]
+}

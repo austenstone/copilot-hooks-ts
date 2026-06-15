@@ -30,11 +30,17 @@ edges:
 - `timestamp` is epoch-ms (a number), not a `Date`.
 - the working directory key is `cwd`, not `workingDirectory`.
 - `toolArgs` arrives as a **JSON-encoded string**, not an object.
-- real firings carry **no** `hookEventName` — you infer the event from keys.
-- the stdout `hookEventName` is **PascalCase** (`PreToolUse`) even though the
-  `hooks.json` wiring key is **camelCase** (`preToolUse`).
-- `agentStop` uses a different output shape (`{ decision, reason }`) than the
-  permission/context events.
+- real firings carry **no** event-name field — you infer the event from keys.
+- output is **flat top-level fields** (`{ permissionDecision, ... }`), the same
+  for every dialect. There is no nested `hookSpecificOutput` wrapper to build.
+- different events read different fields: `preToolUse` wants
+  `permissionDecision`, `agentStop` wants `{ decision: "block", reason }` (block
+  = keep going), `permissionRequest` wants `{ behavior }`, context events want
+  `additionalContext`.
+- there are **two wire dialects**, picked by your `hooks.json` key casing:
+  camelCase (`preToolUse`) is native; PascalCase (`PreToolUse`) is the VS Code /
+  Open Plugins snake_case shape. The library auto-detects which arrived and
+  normalizes both to one canonical camelCase input.
 
 This library encodes all of that so you don't rediscover it.
 
@@ -46,7 +52,7 @@ import { runHooks, denyTool, injectContext, parseToolArgs } from "copilot-hooks-
 
 runHooks({
   userPromptSubmitted(input) {
-    return injectContext(`cwd is ${input.cwd}`, "userPromptSubmitted");
+    return injectContext(`cwd is ${input.cwd}`);
   },
   preToolUse(input) {
     if (input.toolName !== "bash") return; // allow
@@ -57,31 +63,42 @@ runHooks({
 ```
 
 ```jsonc
-// hooks.json
+// hooks.json — `command` is a full shell string (no separate args array)
 {
-  "userPromptSubmitted": [{ "command": "npx", "args": ["tsx", "my-hook.ts"] }],
-  "preToolUse":          [{ "command": "npx", "args": ["tsx", "my-hook.ts"] }]
+  "userPromptSubmitted": [{ "command": "npx tsx my-hook.ts" }],
+  "preToolUse":          [{ "command": "npx tsx my-hook.ts" }]
 }
 ```
 
-`runHooks` reads stdin, infers the event, validates it with zod, dispatches to
-your handler, and emits whatever you return (returning nothing = allow / no-op).
-It's **fail-safe**: errors route to `onError` and are swallowed so a hook never
-crashes the agent.
+`runHooks` reads stdin, infers the event, detects the dialect, validates with
+zod, dispatches to your handler, and emits whatever you return (returning
+nothing = allow / no-op). It is **fail-closed** for `preToolUse` and
+`permissionRequest`: if your handler throws, an explicit deny is emitted so a
+buggy hook can't silently allow a gated action. All other events are fail-safe —
+errors route to `onError` and are swallowed so a hook never crashes the agent.
 
-## The six events
+## The 14 events
 
-| `hooks.json` key | Fires when | Return to… |
-| --- | --- | --- |
-| `sessionStart` | a session begins | `injectContext` |
-| `userPromptSubmitted` | the user sends a prompt | `injectContext` |
-| `preToolUse` | before a tool runs (fail-closed) | `allowTool` / `denyTool` / `askTool` |
-| `postToolUse` | after a tool succeeds | (observe) |
-| `postToolUseFailure` | after a tool errors | (observe) |
-| `agentStop` | the agent is about to stop | `blockStop` |
+| `hooks.json` key | VS Code alias | Fires when | Consumed output |
+| --- | --- | --- | --- |
+| `sessionStart` | `SessionStart` | a session begins | `injectContext` |
+| `sessionEnd` | `SessionEnd` | a session ends | *(ignored)* |
+| `userPromptSubmitted` | `UserPromptSubmit` | the user sends a prompt | `injectContext` / `modifyPrompt` / `blockPrompt` / `respond` |
+| `preToolUse` | `PreToolUse` | before a tool runs (fail-closed) | `allowTool` / `denyTool` / `askTool` / `modifyToolArgs` / `injectContext` |
+| `preMcpToolCall` | *(native only)* | before an MCP tool call | `setMcpMeta` |
+| `postToolUse` | `PostToolUse` | after a tool succeeds | `blockToolResult` / `modifyToolResult` / `injectContext` / `suppressOutput` |
+| `postToolUseFailure` | `PostToolUseFailure` | after a tool errors | `injectContext` |
+| `errorOccurred` | `ErrorOccurred` | an error is raised | *(ignored)* |
+| `agentStop` | `Stop` | the agent is about to stop | `continueAgent` |
+| `subagentStop` | `SubagentStop` | a subagent is about to stop | `continueAgent` |
+| `subagentStart` | *(native only)* | a subagent starts | `injectContext` |
+| `preCompact` | `PreCompact` | before transcript compaction | *(ignored)* |
+| `permissionRequest` | *(native only)* | a permission prompt (fail-closed) | `allowPermission` / `denyPermission` |
+| `notification` | *(native only)* | a user-facing notification | `injectContext` |
 
 Each handler receives a fully-typed, discriminated input (`input.event` narrows
-the shape). `parseToolArgs(input)` decodes the JSON-encoded `toolArgs` for you.
+the shape; `input.dialect` tells you `"native"` vs `"vscode"`).
+`parseToolArgs(input)` decodes the JSON-encoded `toolArgs` for you.
 
 ## Reading the transcript
 
@@ -99,17 +116,22 @@ skillNames(events);          // skills invoked this session
 ```
 
 This is what powers the flagship [heartbeat example](./examples/heartbeat): a
-stateless `agentStop` gate that blocks the stop until the agent has swept every
+stateless `agentStop` gate that keeps the agent going until it has swept every
 required source — deriving everything from the transcript, no state file.
 
 ## API
 
 - **Input**: `runHooks`, `readHookInput`, `parseHookInput`, `parseToolArgs`, `HookParseError`
-- **Output**: `injectContext`, `allowTool`, `denyTool`, `askTool`, `blockStop`, `emit`
+- **Output (flat, dialect-agnostic)**: `injectContext`, `allowTool`, `denyTool`,
+  `askTool`, `modifyToolArgs`, `setMcpMeta`, `blockPrompt`, `modifyPrompt`,
+  `respond`, `blockToolResult`, `modifyToolResult`, `continueAgent`,
+  `allowPermission`, `denyPermission`, `suppressOutput`, `emit`
 - **Transcript**: `streamTranscript`, `loadTranscript`, `joinToolCalls`, `successfulToolCalls`, `skillNames`
-- **Events**: `HOOK_EVENTS`, `inferEventName`, `toPascalEvent`
-- **Schemas**: per-event zod schemas + `schemaByEvent`
-- **Types**: `HookInput`, `HookInputFor<E>`, `HookOutput`, `HookHandlers`, `ToolCall`, `SessionEvent`
+- **Events / dialect**: `HOOK_EVENTS`, `inferEventName`, `detectDialect`,
+  `PASCAL_TO_EVENT`, `EVENT_TO_PASCAL`, plus the `DECISION_EVENTS` /
+  `CONTEXT_ONLY_EVENTS` / `OBSERVE_ONLY_EVENTS` / `FAIL_CLOSED_EVENTS` category sets
+- **Schemas**: `nativeSchemaByEvent`, `compatSchemaByEvent`
+- **Types**: `HookInput`, `HookInputFor<E>`, `HookOutput`, `HookHandlers`, `HookMeta`, `HookDialect`, `ToolCall`, `SessionEvent`
 
 ## Examples
 

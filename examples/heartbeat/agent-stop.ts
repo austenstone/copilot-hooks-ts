@@ -10,12 +10,12 @@
 // It is fully STATELESS: every fact is derived from the transcript on the wire,
 // so there's no state file to manage or clean up.
 //
-// Wire it in hooks.json:
-//   { "agentStop": [{ "command": "node", "args": ["examples/heartbeat/agent-stop.ts"] }] }
-// (compile first, or run via a loader / tsx; see README.)
+// Wire it in hooks.json (native, camelCase key):
+//   { "agentStop": [{ "command": "npx tsx examples/heartbeat/agent-stop.ts" }] }
+// `command` is a full shell string. See examples/README.md for VS Code wiring.
 
 import {
-  blockStop,
+  continueAgent,
   loadTranscript,
   runHooks,
   skillNames,
@@ -73,7 +73,7 @@ runHooks(
       if (unchecked.length === 0) return; // full coverage -> allow stop
 
       const names = unchecked.map((s) => s.name).join(", ");
-      return blockStop(
+      return continueAgent(
         `${SENTINEL} HEARTBEAT COVERAGE GATE — not done yet. ` +
           `Still UNCHECKED: ${names}. ` +
           `Make a successful read/search/list call for each unchecked source ` +

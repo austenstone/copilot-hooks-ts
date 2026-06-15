@@ -22,8 +22,8 @@ When the agent tries to stop, the CLI fires `agentStop` with a `transcriptPath`
    re-prompt. After `MAX_BLOCKS` (3) it gives up so a stuck agent can exit.
 4. Computes coverage from **successful** tool calls (`successfulToolCalls`) — a
    read/search/list against each source. Sends and writes don't count.
-5. If any source is unchecked, returns `blockStop(reason)` listing what's left.
-   Otherwise it allows the stop.
+5. If any source is unchecked, returns `continueAgent(reason)` listing what's
+   left — the agent keeps going. Otherwise it allows the stop.
 
 It is **fully stateless**: every fact comes from the transcript on the wire, so
 there's no state file to write, read, or clean up.
@@ -31,10 +31,19 @@ there's no state file to write, read, or clean up.
 ## Wire it
 
 ```jsonc
-// hooks.json
+// hooks.json (native)
 {
   "agentStop": [
-    { "command": "npx", "args": ["tsx", "examples/heartbeat/agent-stop.ts"] }
+    { "command": "npx tsx examples/heartbeat/agent-stop.ts" }
+  ]
+}
+```
+
+```jsonc
+// hooks.vscode.json (VS Code / Open Plugins — "Stop" is the PascalCase alias)
+{
+  "Stop": [
+    { "command": "npx tsx examples/heartbeat/agent-stop.ts" }
   ]
 }
 ```

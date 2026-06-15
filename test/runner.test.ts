@@ -1,6 +1,7 @@
 import { Readable, Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { blockStop, runHooks } from "../src/index.js";
+import { continueAgent, denyTool, runHooks } from "../src/index.js";
+import * as fx from "./fixtures.js";
 
 function stdinFrom(payload: object): NodeJS.ReadStream {
   return Readable.from([
@@ -25,8 +26,6 @@ function captureStdout(): {
   };
 }
 
-const base = { sessionId: "s1", timestamp: 1, cwd: "/repo" };
-
 describe("runHooks", () => {
   it("dispatches to the matching handler and emits its output", async () => {
     const out = captureStdout();
@@ -34,17 +33,10 @@ describe("runHooks", () => {
       {
         agentStop: (input) => {
           expect(input.event).toBe("agentStop");
-          return blockStop("not yet");
+          return continueAgent("not yet");
         },
       },
-      {
-        stream: stdinFrom({
-          ...base,
-          stopReason: "done",
-          transcriptPath: "/t",
-        }),
-        out: out.stream,
-      },
+      { stream: stdinFrom(fx.nativeAgentStop), out: out.stream },
     );
     expect(JSON.parse(out.written())).toEqual({
       decision: "block",
@@ -52,50 +44,100 @@ describe("runHooks", () => {
     });
   });
 
+  it("normalizes compat payloads before dispatch", async () => {
+    const out = captureStdout();
+    await runHooks(
+      {
+        preToolUse: (input) => {
+          expect(input.dialect).toBe("vscode");
+          expect(input.toolName).toBe("Bash");
+          return undefined;
+        },
+      },
+      { stream: stdinFrom(fx.compatPreToolUse), out: out.stream },
+    );
+    expect(out.written()).toBe("");
+  });
+
   it("emits nothing when the handler returns void", async () => {
     const out = captureStdout();
     await runHooks(
       { agentStop: () => undefined },
-      {
-        stream: stdinFrom({
-          ...base,
-          stopReason: "done",
-          transcriptPath: "/t",
-        }),
-        out: out.stream,
-      },
+      { stream: stdinFrom(fx.nativeAgentStop), out: out.stream },
     );
     expect(out.written()).toBe("");
   });
 
-  it("emits nothing when no handler is registered for the event", async () => {
+  it("emits nothing when no handler is registered", async () => {
     const out = captureStdout();
     await runHooks(
-      { preToolUse: () => denyMarker },
-      {
-        stream: stdinFrom({ ...base, prompt: "hi" }),
-        out: out.stream,
-      },
+      { preToolUse: () => denyTool("x") },
+      { stream: stdinFrom(fx.nativeUserPromptSubmitted), out: out.stream },
     );
     expect(out.written()).toBe("");
   });
 
-  it("is fail-safe: routes errors to onError and never throws", async () => {
+  it("fail-closed: a thrown preToolUse handler emits an explicit deny", async () => {
     const out = captureStdout();
     let captured: unknown;
     await runHooks(
-      {},
       {
-        stream: stdinFrom({ ...base }), // unrecognizable -> parse error
+        preToolUse: () => {
+          throw new Error("handler bug");
+        },
+      },
+      {
+        stream: stdinFrom(fx.nativePreToolUse),
         out: out.stream,
-        onError: (err) => {
-          captured = err;
+        onError: (e) => {
+          captured = e;
         },
       },
     );
     expect(captured).toBeInstanceOf(Error);
+    expect(JSON.parse(out.written()).permissionDecision).toBe("deny");
+  });
+
+  it("fail-closed: permissionRequest handler error emits deny", async () => {
+    const out = captureStdout();
+    await runHooks(
+      {
+        permissionRequest: () => {
+          throw new Error("boom");
+        },
+      },
+      { stream: stdinFrom(fx.nativePermissionRequest), out: out.stream },
+    );
+    expect(JSON.parse(out.written()).behavior).toBe("deny");
+  });
+
+  it("fail-safe: a thrown non-gated handler emits nothing", async () => {
+    const out = captureStdout();
+    await runHooks(
+      {
+        agentStop: () => {
+          throw new Error("boom");
+        },
+      },
+      { stream: stdinFrom(fx.nativeAgentStop), out: out.stream },
+    );
+    expect(out.written()).toBe("");
+  });
+
+  it("parse failure sets a nonzero exit code when failClosed", async () => {
+    const out = captureStdout();
+    let code: number | undefined;
+    await runHooks(
+      {},
+      {
+        stream: stdinFrom({ sessionId: "s1", timestamp: 1, cwd: "/r" }),
+        out: out.stream,
+        setExitCode: (c) => {
+          code = c;
+        },
+      },
+    );
+    expect(code).toBe(1);
     expect(out.written()).toBe("");
   });
 });
-
-const denyMarker = { hookSpecificOutput: { hookEventName: "PreToolUse" } };

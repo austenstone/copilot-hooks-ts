@@ -1,0 +1,3 @@
+{
+  "Stop": [{ "command": "npx tsx examples/heartbeat/agent-stop.ts" }]
+}

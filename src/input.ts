@@ -1,5 +1,6 @@
-import { inferEventName } from "./events.js";
-import { type HookInput, schemaByEvent } from "./schema.js";
+import { compatSchemaByEvent } from "./compat.js";
+import { detectDialect, inferEventName } from "./events.js";
+import { type HookInput, nativeSchemaByEvent } from "./schema.js";
 
 export class HookParseError extends Error {
   override name = "HookParseError";
@@ -7,9 +8,13 @@ export class HookParseError extends Error {
 
 /**
  * Parse a raw stdin string (or an already-parsed object) into a typed,
- * event-tagged HookInput. Throws HookParseError on malformed input or an
- * unrecognizable event. Callers that must never throw (e.g. fail-closed
- * preToolUse) should use runHooks, which catches for them.
+ * event-tagged HookInput. Auto-detects the wire dialect (native camelCase vs VS
+ * Code snake_case) and normalizes both into the same canonical shape, so the
+ * returned input always has camelCase fields plus `event` and `dialect`.
+ *
+ * Throws HookParseError on malformed input or an unrecognizable event. Callers
+ * that must never throw (e.g. fail-closed preToolUse) should use runHooks, which
+ * catches for them.
  */
 export function parseHookInput(raw: string | object): HookInput {
   let payload: unknown;
@@ -27,24 +32,31 @@ export function parseHookInput(raw: string | object): HookInput {
     throw new HookParseError("hook payload was not a JSON object");
   }
 
-  const event = inferEventName(payload as Record<string, unknown>);
+  const record = payload as Record<string, unknown>;
+  const event = inferEventName(record);
   if (!event) {
     throw new HookParseError("could not infer hook event from payload keys");
   }
 
-  const result = schemaByEvent[event].safeParse(payload);
+  const dialect = detectDialect(record, event);
+  const schema =
+    dialect === "vscode"
+      ? (compatSchemaByEvent[event] ?? nativeSchemaByEvent[event])
+      : nativeSchemaByEvent[event];
+
+  const result = schema.safeParse(payload);
   if (!result.success) {
     throw new HookParseError(
-      `payload failed validation for ${event}: ${result.error.message}`,
+      `payload failed validation for ${event} (${dialect}): ${result.error.message}`,
     );
   }
 
-  return { ...result.data, event } as HookInput;
+  return { ...(result.data as object), event, dialect } as HookInput;
 }
 
 /**
- * Read the entire hook payload from a stream (default: process.stdin) and
- * parse it. The CLI sends one JSON object then closes stdin.
+ * Read the entire hook payload from a stream (default: process.stdin) and parse
+ * it. The CLI sends one JSON object then closes stdin.
  */
 export async function readHookInput(
   stream: NodeJS.ReadStream = process.stdin,
@@ -62,8 +74,8 @@ async function readStream(stream: NodeJS.ReadStream): Promise<string> {
 }
 
 /**
- * Tool args arrive on the wire as a JSON-encoded STRING. Decode them safely;
- * returns undefined if absent or unparseable (never throws).
+ * preToolUse/postToolUse tool args arrive on the wire as a JSON-encoded STRING.
+ * Decode them safely; returns undefined if absent or unparseable (never throws).
  */
 export function parseToolArgs<T = unknown>(input: {
   toolArgs?: string;

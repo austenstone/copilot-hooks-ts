@@ -25,6 +25,6 @@ runHooks({
       branch ? `Current git branch: ${branch}.` : undefined,
       "House rule: never commit without an explicit request.",
     ].filter(Boolean);
-    return injectContext(lines.join("\n"), "userPromptSubmitted");
+    return injectContext(lines.join("\n"));
   },
 });
