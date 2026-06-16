@@ -88,6 +88,13 @@ export type {
   UserPromptSubmittedInput,
 } from "./schema.js";
 export { nativeSchemaByEvent } from "./schema.js";
+// Test harness for hook authors
+export {
+  buildHookPayload,
+  type HookPayloadSpec,
+  type TestHookOptions,
+  testHook,
+} from "./testing.js";
 export type {
   CreateInput,
   GlobInput,

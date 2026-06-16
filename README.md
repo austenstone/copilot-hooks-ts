@@ -3,82 +3,104 @@
 [![CI](https://github.com/austenstone/copilot-hooks-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/austenstone/copilot-hooks-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/copilot-hooks-ts.svg)](https://www.npmjs.com/package/copilot-hooks-ts)
 
-Type-safe authoring for **GitHub Copilot CLI hooks**. Parse the stdin payload,
-build a decision, and read the session transcript — all fully typed, anchored to
-the real CLI subprocess wire format and `@github/copilot-sdk`'s generated event
-types.
-
-Think [`cc-hooks-ts`](https://www.npmjs.com/package/cc-hooks-ts) (Claude Code),
-but for Copilot — and with a typed reader for the session transcript that the
-others don't have.
+Type-safe **GitHub Copilot CLI hooks**. Write a handler, return a decision, done. The library handles the messy wire format (stdin parsing, event inference, dialect detection, zod validation) so you don't.
 
 ```bash
 npm i copilot-hooks-ts
 ```
 
-> ESM-only. Node 18+. `@github/copilot-sdk` is an **optional, type-only** peer
-> dependency — it contributes zero runtime weight (verified: no SDK references
-> in the built `dist/index.js`).
-
-## Why
-
-Copilot CLI fires hooks by spawning a subprocess wired in `hooks.json`. Each
-event hands your script a JSON payload on **stdin**; you reply with a JSON
-decision on **stdout** (or exit 0 silently to allow). The contract has sharp
-edges:
-
-- `timestamp` is epoch-ms (a number), not a `Date`.
-- the working directory key is `cwd`, not `workingDirectory`.
-- `toolArgs` arrives as a **JSON-encoded string**, not an object.
-- real firings carry **no** event-name field — you infer the event from keys.
-- output is **flat top-level fields** (`{ permissionDecision, ... }`), the same
-  for every dialect. There is no nested `hookSpecificOutput` wrapper to build.
-- different events read different fields: `preToolUse` wants
-  `permissionDecision`, `agentStop` wants `{ decision: "block", reason }` (block
-  = keep going), `permissionRequest` wants `{ behavior }`, context events want
-  `additionalContext`.
-- there are **two wire dialects**, picked by your `hooks.json` key casing:
-  camelCase (`preToolUse`) is native; PascalCase (`PreToolUse`) is the VS Code /
-  Open Plugins snake_case shape. The library auto-detects which arrived and
-  normalizes both to one canonical camelCase input.
-
-This library encodes all of that so you don't rediscover it.
-
 ## Quick start
+
+Write a hook. Here's a guardrail that blocks dangerous shell commands before they run, plus context injected once when the session starts:
 
 ```ts
 // my-hook.ts
-import { runHooks, denyTool, injectContext } from "copilot-hooks-ts";
+import { execSync } from "node:child_process";
+import {
+  runHooks,
+  denyTool,
+  injectContext,
+  continueAgent,
+  loadTranscript,
+} from "copilot-hooks-ts";
+
+const BLOCKED = [/rm\s+-rf\s+\//, /git\s+push\s+.*--force/, /\.env\b/];
 
 runHooks({
-  userPromptSubmitted(input) {
-    return injectContext(`cwd is ${input.cwd}`);
-  },
+  // Guardrail: deny a tool call before it runs. `bash` types `toolInput.command`.
   preToolUse: {
-    // keyed by tool name — `toolInput` is typed to the shell input shape
     bash({ toolInput }) {
-      if (toolInput.command?.includes(".env")) return denyTool("no touching .env");
+      const hit = BLOCKED.find((re) => re.test(toolInput.command ?? ""));
+      if (hit) return denyTool(`blocked by guardrail: ${hit}`);
     },
+  },
+
+  // Context injection: hand the model project context once, at session start.
+  sessionStart() {
+    const branch = execSync("git branch --show-current").toString().trim();
+    return injectContext(`Current branch: ${branch}. House rule: no force pushes.`);
+  },
+
+  // Stop gate: if the user said "call me X", don't stop until the agent
+  // actually used the name. Return continueAgent to keep going; nothing = allow.
+  async agentStop(input) {
+    const text = JSON.stringify(await loadTranscript(input.transcriptPath!));
+    const name = text.match(/call me (\w+)/i)?.[1];
+    if (name && text.split(name).length - 1 < 2) {
+      return continueAgent(`The user asked to be called ${name}. Address them by name.`);
+    }
   },
 });
 ```
 
+Wire it in `hooks.json` (`command` is a full shell string):
+
 ```jsonc
-// hooks.json — `command` is a full shell string (no separate args array)
 {
-  "userPromptSubmitted": [{ "command": "npx tsx my-hook.ts" }],
-  "preToolUse":          [{ "command": "npx tsx my-hook.ts" }]
+  "preToolUse":   [{ "command": "npx tsx my-hook.ts" }],
+  "sessionStart": [{ "command": "npx tsx my-hook.ts" }],
+  "agentStop":    [{ "command": "npx tsx my-hook.ts" }]
 }
 ```
 
-`runHooks` reads stdin, infers the event, detects the dialect, validates with
-zod, dispatches to your handler, and emits whatever you return (returning
-nothing = allow / no-op). It is **fail-closed** for `preToolUse` and
-`permissionRequest`: if your handler throws, an explicit deny is emitted so a
-buggy hook can't silently allow a gated action. All other events are fail-safe —
-errors route to `onError` and are swallowed so a hook never crashes the agent.
+That's it. Return nothing to allow, return a builder (`denyTool`, `injectContext`, ...) to act. `preToolUse` and `permissionRequest` are **fail-closed**: if your handler throws, an explicit deny is emitted so a bug can't silently allow a gated action.
 
-## The 14 events
+> ESM-only, Node 18+. `@github/copilot-sdk` is an optional, type-only peer dep with zero runtime weight.
+
+## Test your hooks
+
+`testHook` runs a handler through the real dispatch path and returns the parsed decision. Works with any test runner (Vitest, Jest, `node:test`).
+
+```ts
+import { testHook } from "copilot-hooks-ts";
+import { handlers } from "./my-hook.js";
+
+const out = await testHook(handlers, {
+  event: "preToolUse",
+  toolInput: { command: "rm -rf /" },
+});
+// out -> { permissionDecision: "deny", permissionDecisionReason: "..." }
+// undefined when the hook allowed / no-op'd
+```
+
+Only `event` is required. Pass `toolInput` and it's encoded to the right wire field for you.
+
+## Reading the transcript
+
+`agentStop` payloads carry a `transcriptPath` to the session's `events.jsonl`. The typed reader makes it easy to gate on what actually happened:
+
+```ts
+import { loadTranscript, successfulToolCalls, skillNames } from "copilot-hooks-ts";
+
+const events = await loadTranscript(input.transcriptPath!);
+successfulToolCalls(events); // tool calls that succeeded
+skillNames(events);          // skills invoked this session
+```
+
+See the [heartbeat example](./examples/heartbeat) for a stateless `agentStop` coverage gate built on this.
+
+<details>
+<summary><b>The 14 events</b></summary>
 
 | `hooks.json` key | VS Code alias | Fires when | Consumed output |
 | --- | --- | --- | --- |
@@ -97,44 +119,32 @@ errors route to `onError` and are swallowed so a hook never crashes the agent.
 | `permissionRequest` | *(native only)* | a permission prompt (fail-closed) | `allowPermission` / `denyPermission` |
 | `notification` | *(native only)* | a user-facing notification | `injectContext` |
 
-Each handler receives a fully-typed, discriminated input (`input.event` narrows
-the shape; `input.dialect` tells you `"native"` vs `"vscode"`).
-`parseToolArgs(input)` decodes the JSON-encoded `toolArgs` for you.
+Each handler gets a fully-typed, discriminated input. `input.event` narrows the shape, `input.dialect` tells you `"native"` vs `"vscode"`. Both wire dialects (camelCase native, PascalCase VS Code) auto-detect and normalize to one canonical shape.
 
-## Tool-scoped hooks
+</details>
 
-The five tool events — `preToolUse`, `postToolUse`, `postToolUseFailure`,
-`preMcpToolCall`, `permissionRequest` — accept a **map keyed by tool name**
-instead of a single handler. The matched key narrows `input.toolInput` to that
-tool's input shape, and `default` catches anything unlisted:
+<details>
+<summary><b>Tool-scoped hooks</b></summary>
+
+The five tool events (`preToolUse`, `postToolUse`, `postToolUseFailure`, `preMcpToolCall`, `permissionRequest`) accept a map keyed by tool name. The matched key narrows `input.toolInput` to that tool's shape, and `default` catches the rest:
 
 ```ts
 runHooks({
   preToolUse: {
     bash({ toolInput }) {
-      // toolInput: { command: string; description?: string; ... }
       if (toolInput.command.includes("rm -rf /")) return denyTool("nope");
     },
     view({ toolInput }) {
       // toolInput: { path: string; view_range?: number[] }
     },
-    default({ toolName }) {
-      // every other tool
-    },
+    default({ toolName }) {},
   },
 });
 ```
 
-No matching key and no `default` is a no-op (allow). Built-in shapes ship for
-`bash` / `powershell` / `local_shell`, `view`, `create`, `edit`,
-`str_replace_editor`, `glob`, and `grep`. Need it standalone (outside
-`runHooks`)? Use `onTool<"preToolUse">({ ... })`, which returns a plain event
-handler.
+Built-in shapes ship for `bash` / `powershell` / `local_shell`, `view`, `create`, `edit`, `str_replace_editor`, `glob`, and `grep`. Use `onTool<"preToolUse">({ ... })` for a standalone handler.
 
-### Typing your own / MCP tools
-
-`ToolSchema` is an augmentable interface — add your tools (MCP tools arrive as
-`mcp__<server>__<tool>`) with declaration merging and they become typed keys:
+Type your own (or MCP) tools via declaration merging:
 
 ```ts
 declare module "copilot-hooks-ts" {
@@ -144,74 +154,28 @@ declare module "copilot-hooks-ts" {
     };
   }
 }
-
-runHooks({
-  preMcpToolCall: {
-    mcp__deepwiki__ask_question({ toolInput }) {
-      // toolInput: { question: string; repoName: string }
-    },
-  },
-});
 ```
 
-## Gating with `shouldRun`
+</details>
 
-Pass `shouldRun` to skip a run entirely before stdin is even read — handy for
-cheap environment checks. `false` emits nothing (an allow / no-op):
+<details>
+<summary><b>API reference</b></summary>
 
-```ts
-runHooks(handlers, { shouldRun: () => process.platform === "darwin" });
-```
-
-## Reading the transcript
-
-`agentStop` payloads include `transcriptPath` — the session's `events.jsonl`,
-line-delimited `SessionEvent`s from the SDK. The transcript reader types it for
-you:
-
-```ts
-import { loadTranscript, joinToolCalls, successfulToolCalls, skillNames } from "copilot-hooks-ts";
-
-const events = await loadTranscript(input.transcriptPath!);
-joinToolCalls(events);       // start+complete joined by toolCallId, in order
-successfulToolCalls(events); // only the ones that succeeded
-skillNames(events);          // skills invoked this session
-```
-
-This is what powers the flagship [heartbeat example](./examples/heartbeat): a
-stateless `agentStop` gate that keeps the agent going until it has swept every
-required source — deriving everything from the transcript, no state file.
-
-## API
-
-- **Input**: `runHooks`, `readHookInput`, `parseHookInput`, `parseToolArgs`, `HookParseError`
-- **Tool-scoped**: `onTool`, plus the augmentable `ToolSchema` and types
-  `ToolName`, `ToolInputOf<Name>`, `ToolScopedInput<E, Name>`, `ToolHandlerMap<E>`,
-  `ToolEvent`, and built-in input shapes (`ShellInput`, `ViewInput`, `CreateInput`,
-  `StrReplaceInput`, `InsertInput`, `GlobInput`, `GrepInput`)
-- **Output (flat, dialect-agnostic)**: `injectContext`, `allowTool`, `denyTool`,
-  `askTool`, `modifyToolArgs`, `setMcpMeta`, `blockPrompt`, `modifyPrompt`,
-  `respond`, `blockToolResult`, `modifyToolResult`, `continueAgent`,
-  `allowPermission`, `denyPermission`, `suppressOutput`, `emit`
+- **Run / input**: `runHooks`, `readHookInput`, `parseHookInput`, `parseToolArgs`, `HookParseError`
+- **Output builders**: `injectContext`, `allowTool`, `denyTool`, `askTool`, `modifyToolArgs`, `setMcpMeta`, `blockPrompt`, `modifyPrompt`, `respond`, `blockToolResult`, `modifyToolResult`, `continueAgent`, `allowPermission`, `denyPermission`, `suppressOutput`, `emit`
+- **Tool-scoped**: `onTool`, the augmentable `ToolSchema`, and types `ToolName`, `ToolInputOf<Name>`, `ToolScopedInput<E, Name>`, `ToolHandlerMap<E>`, `ToolEvent`, plus input shapes (`ShellInput`, `ViewInput`, `CreateInput`, `StrReplaceInput`, `InsertInput`, `GlobInput`, `GrepInput`)
 - **Transcript**: `streamTranscript`, `loadTranscript`, `joinToolCalls`, `successfulToolCalls`, `skillNames`
-- **Events / dialect**: `HOOK_EVENTS`, `inferEventName`, `detectDialect`,
-  `PASCAL_TO_EVENT`, `EVENT_TO_PASCAL`, plus the `DECISION_EVENTS` /
-  `CONTEXT_ONLY_EVENTS` / `OBSERVE_ONLY_EVENTS` / `FAIL_CLOSED_EVENTS` category sets
+- **Testing**: `testHook`, `buildHookPayload` (types `HookPayloadSpec`, `TestHookOptions`)
+- **Events / dialect**: `HOOK_EVENTS`, `inferEventName`, `detectDialect`, `PASCAL_TO_EVENT`, `EVENT_TO_PASCAL`, and the `DECISION_EVENTS` / `CONTEXT_ONLY_EVENTS` / `OBSERVE_ONLY_EVENTS` / `FAIL_CLOSED_EVENTS` category sets
 - **Schemas**: `nativeSchemaByEvent`, `compatSchemaByEvent`
 - **Types**: `HookInput`, `HookInputFor<E>`, `HookOutput`, `HookHandlers`, `HookMeta`, `HookDialect`, `ToolCall`, `SessionEvent`
+- **Gating**: pass `shouldRun` to `runHooks` to skip a run before stdin is read, e.g. `{ shouldRun: () => process.platform === "darwin" }`
+
+</details>
 
 ## Examples
 
-See [`examples/`](./examples): context injection, a deny guardrail, and the full
-heartbeat coverage gate. They typecheck against the library.
-
-## Develop
-
-```bash
-npm run typecheck   # tsc --noEmit
-npm run build       # tsup -> dist (ESM + .d.ts)
-npm test            # vitest
-```
+[`examples/`](./examples) has runnable hooks: context injection, a deny guardrail, before/after timing, and the heartbeat coverage gate. All typecheck against the library.
 
 ## License
 
