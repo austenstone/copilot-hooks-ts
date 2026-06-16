@@ -144,7 +144,7 @@ export type ToolHandlerMap<E extends ToolEvent> = {
   default?: ToolHandler<E, string>;
 };
 
-function decodeToolInput(input: Record<string, unknown>): unknown {
+const decodeToolInput = (input: Record<string, unknown>): unknown => {
   if ("toolArgs" in input) {
     const raw = input.toolArgs;
     if (typeof raw !== "string") return raw;
@@ -157,7 +157,7 @@ function decodeToolInput(input: Record<string, unknown>): unknown {
   if ("arguments" in input) return input.arguments;
   if ("toolInput" in input) return input.toolInput;
   return undefined;
-}
+};
 
 /**
  * Turns a tool-scoped handler map into a single event handler: it decodes the
@@ -166,9 +166,9 @@ function decodeToolInput(input: Record<string, unknown>): unknown {
  * `default` means no-op (allow). Use it standalone, or just pass the map
  * directly as a `runHooks` value for a tool event.
  */
-export function onTool<E extends ToolEvent>(
+export const onTool = <E extends ToolEvent>(
   handlers: ToolHandlerMap<E>,
-): (input: ToolEventInput<E>) => HookResult | Promise<HookResult> {
+): ((input: ToolEventInput<E>) => HookResult | Promise<HookResult>) => {
   const table = handlers as Record<string, ToolHandler<E, string> | undefined>;
   return (input) => {
     const record = input as unknown as Record<string, unknown>;
@@ -180,4 +180,4 @@ export function onTool<E extends ToolEvent>(
     } as ToolScopedInput<E, string>;
     return handler(scoped);
   };
-}
+};

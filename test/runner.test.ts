@@ -3,16 +3,16 @@ import { describe, expect, it } from "vitest";
 import { continueAgent, denyTool, runHooks } from "../src/index.js";
 import * as fx from "./fixtures.js";
 
-function stdinFrom(payload: object): NodeJS.ReadStream {
+const stdinFrom = (payload: object): NodeJS.ReadStream => {
   return Readable.from([
     JSON.stringify(payload),
   ]) as unknown as NodeJS.ReadStream;
-}
+};
 
-function captureStdout(): {
+const captureStdout = (): {
   stream: NodeJS.WriteStream;
   written: () => string;
-} {
+} => {
   let buf = "";
   const stream = new Writable({
     write(chunk, _enc, cb) {
@@ -24,7 +24,7 @@ function captureStdout(): {
     stream: stream as unknown as NodeJS.WriteStream,
     written: () => buf,
   };
-}
+};
 
 describe("runHooks", () => {
   it("dispatches to the matching handler and emits its output", async () => {

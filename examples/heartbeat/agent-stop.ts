@@ -9,10 +9,6 @@
 //
 // It is fully STATELESS: every fact is derived from the transcript on the wire,
 // so there's no state file to manage or clean up.
-//
-// Wire it in hooks.json (native, camelCase key):
-//   { "agentStop": [{ "command": "npx tsx examples/heartbeat/agent-stop.ts" }] }
-// `command` is a full shell string. See examples/README.md for VS Code wiring.
 
 import {
   continueAgent,
@@ -46,17 +42,13 @@ const SOURCES: Source[] = [
 runHooks(
   {
     async agentStop(input) {
-      // No transcript -> nothing to gate on; let the agent stop.
       if (!input.transcriptPath) return;
 
       const events = await loadTranscript(input.transcriptPath);
 
-      // Only gate heartbeat sessions. The heartbeat skill being invoked is the
-      // signal this is a coverage run and not some unrelated task.
       const isHeartbeat = skillNames(events).some((n) => /heartbeat/i.test(n));
       if (!isHeartbeat) return;
 
-      // Escape valve: if we've already blocked MAX_BLOCKS times, stop nagging.
       const priorBlocks = events.filter(
         (e) =>
           e.type === "user.message" &&
@@ -65,19 +57,17 @@ runHooks(
       ).length;
       if (priorBlocks >= MAX_BLOCKS) return;
 
-      // Which sources were actually queried (successful read/search/list)?
       const calls = successfulToolCalls(events);
       const unchecked = SOURCES.filter(
         (src) => !calls.some((call) => src.matches(call)),
       );
-      if (unchecked.length === 0) return; // full coverage -> allow stop
+      if (unchecked.length === 0) return;
 
       const names = unchecked.map((s) => s.name).join(", ");
       return continueAgent(
-        `${SENTINEL} HEARTBEAT COVERAGE GATE — not done yet. ` +
-          `Still UNCHECKED: ${names}. ` +
-          `Make a successful read/search/list call for each unchecked source ` +
-          `(sends/writes do NOT count), then you may stop.`,
+        `${SENTINEL} HEARTBEAT COVERAGE GATE — not done yet.
+        Still UNCHECKED: ${names}.
+        Make a successful tool call for each unchecked source.`,
       );
     },
   },

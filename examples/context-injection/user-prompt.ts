@@ -7,7 +7,7 @@
 import { execSync } from "node:child_process";
 import { injectContext, runHooks } from "copilot-hooks-ts";
 
-function gitBranch(cwd: string): string | undefined {
+const gitBranch = (cwd: string): string | undefined => {
   try {
     return execSync("git rev-parse --abbrev-ref HEAD", {
       cwd,
@@ -16,7 +16,7 @@ function gitBranch(cwd: string): string | undefined {
   } catch {
     return undefined;
   }
-}
+};
 
 runHooks({
   userPromptSubmitted(input) {

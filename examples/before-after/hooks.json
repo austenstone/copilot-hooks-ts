@@ -1,0 +1,4 @@
+{
+  "preToolUse": [{ "command": "npx tsx examples/before-after/pre-post.ts" }],
+  "postToolUse": [{ "command": "npx tsx examples/before-after/pre-post.ts" }]
+}

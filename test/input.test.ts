@@ -125,6 +125,17 @@ describe("parseHookInput (compat normalization)", () => {
       expect(input.toolResult.textResultForLlm).toBe("a\nb");
     }
   });
+
+  it("normalizes a VS Code postToolUse tool_response string", () => {
+    const input = parseHookInput(fx.compatPostToolUseResponse);
+    expect(input.event).toBe("postToolUse");
+    expect(input.dialect).toBe("vscode");
+    if (input.event === "postToolUse") {
+      expect(input.toolName).toBe("run_in_terminal");
+      expect(input.toolResult.textResultForLlm).toBe("build complete");
+      expect(input.toolResult.resultType).toBeUndefined();
+    }
+  });
 });
 
 describe("parseHookInput errors", () => {

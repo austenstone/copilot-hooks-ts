@@ -27,11 +27,11 @@ export async function* streamTranscript(
 }
 
 /** Read an entire transcript into memory as a typed event array. */
-export async function loadTranscript(path: string): Promise<SessionEvent[]> {
+export const loadTranscript = async (path: string): Promise<SessionEvent[]> => {
   const events: SessionEvent[] = [];
   for await (const event of streamTranscript(path)) events.push(event);
   return events;
-}
+};
 
 export interface ToolCall {
   toolCallId: string;
@@ -47,7 +47,7 @@ export interface ToolCall {
  * toolCallId, preserving start order. This is the core primitive for asking
  * "what tools actually ran, and did they succeed?".
  */
-export function joinToolCalls(events: readonly SessionEvent[]): ToolCall[] {
+export const joinToolCalls = (events: readonly SessionEvent[]): ToolCall[] => {
   const starts = new Map<string, { toolName: string; arguments: unknown }>();
   const order: string[] = [];
   const completes = new Map<string, { success: boolean; error: unknown }>();
@@ -80,20 +80,20 @@ export function joinToolCalls(events: readonly SessionEvent[]): ToolCall[] {
       error: complete?.error,
     };
   });
-}
+};
 
 /** Tool calls whose completion reported success. */
-export function successfulToolCalls(
+export const successfulToolCalls = (
   events: readonly SessionEvent[],
-): ToolCall[] {
+): ToolCall[] => {
   return joinToolCalls(events).filter((call) => call.success === true);
-}
+};
 
 /** Names of all skills invoked in the transcript (e.g. to detect a workflow). */
-export function skillNames(events: readonly SessionEvent[]): string[] {
+export const skillNames = (events: readonly SessionEvent[]): string[] => {
   const names: string[] = [];
   for (const event of events) {
     if (event.type === "skill.invoked") names.push(event.data.name);
   }
   return names;
-}
+};

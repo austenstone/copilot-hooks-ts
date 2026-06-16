@@ -18,8 +18,7 @@ runHooks(
         const hit = BLOCKED.find((re) => re.test(command));
         if (hit) {
           return denyTool(
-            `Blocked by guardrail: command matches ${hit}. ` +
-              `Edit the guardrail in examples/guardrail-deny if this is intended.`,
+            `Blocked by guardrail: command matches ${hit}. Edit the guardrail in examples/guardrail-deny if this is intended.`,
           );
         }
         return; // no match -> fall through to normal permission flow
@@ -27,7 +26,6 @@ runHooks(
     },
   },
   {
-    // If parsing/logic throws, fail CLOSED by denying explicitly.
     onError: (err) => console.error("[guardrail]", err),
   },
 );

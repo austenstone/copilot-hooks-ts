@@ -33,7 +33,7 @@ const lines = [
   },
 ];
 
-function fixture(): string {
+const fixture = (): string => {
   const dir = mkdtempSync(join(tmpdir(), "chooks-"));
   const path = join(dir, "events.jsonl");
   writeFileSync(
@@ -42,7 +42,7 @@ function fixture(): string {
     "utf8",
   );
   return path;
-}
+};
 
 describe("transcript reader", () => {
   it("loads and types every non-blank line", async () => {

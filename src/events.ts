@@ -92,49 +92,30 @@ export const OBSERVE_ONLY_EVENTS = [
  */
 export const FAIL_CLOSED_EVENTS = ["preToolUse", "permissionRequest"] as const;
 
-/**
- * Events that have a distinct VS Code / Open Plugins snake_case wire payload.
- * preMcpToolCall, subagentStart, permissionRequest, and notification are always
- * delivered in the native camelCase shape regardless of hooks.json key casing.
- */
-const VSCODE_CAPABLE_EVENTS = new Set<HookEventName>([
-  "sessionStart",
-  "sessionEnd",
-  "userPromptSubmitted",
-  "preToolUse",
-  "postToolUse",
-  "postToolUseFailure",
-  "errorOccurred",
-  "agentStop",
-  "subagentStop",
-  "preCompact",
-]);
-
-function isHookEventName(value: string): value is HookEventName {
-  return (HOOK_EVENTS as readonly string[]).includes(value);
-}
+export const isHookEventName = (value: string): value is HookEventName =>
+  (HOOK_EVENTS as readonly string[]).includes(value);
 
 /** Map an explicit event-name field (either dialect) to a canonical event. */
-function fromExplicitName(raw: unknown): HookEventName | undefined {
+export const fromExplicitName = (raw: unknown): HookEventName | undefined => {
   if (typeof raw !== "string") return undefined;
   if (PASCAL_TO_EVENT[raw]) return PASCAL_TO_EVENT[raw];
   const camel = raw.charAt(0).toLowerCase() + raw.slice(1);
   return isHookEventName(camel) ? camel : undefined;
-}
+};
 
-function has(payload: Record<string, unknown>, key: string): boolean {
-  return Object.hasOwn(payload, key);
-}
+export const has = (payload: Record<string, unknown>, key: string): boolean =>
+  Object.hasOwn(payload, key);
 
 /**
- * Infer which event a stdin payload represents. Compat (VS Code) and
- * notification payloads carry `hook_event_name`; native payloads carry no event
- * field, so the event is derived from which keys are present. Returns undefined
- * when no event can be determined.
+ * Infer which event a native (camelCase) stdin payload represents. Native
+ * firings carry no event-name field, so the event is derived from which keys are
+ * present; an explicit `hook_event_name`/`hookEventName` (either dialect) is
+ * honored first. Returns undefined when no native event can be determined —
+ * callers fall back to {@link inferCompatEvent} for snake_case-only payloads.
  */
-export function inferEventName(
+export const inferEventName = (
   payload: Record<string, unknown>,
-): HookEventName | undefined {
+): HookEventName | undefined => {
   const explicit =
     fromExplicitName(payload.hook_event_name) ??
     fromExplicitName(payload.hookEventName);
@@ -145,8 +126,7 @@ export function inferEventName(
     payload.hookName === "permissionRequest"
   )
     return "permissionRequest";
-  if (has(payload, "notificationType") || has(payload, "notification_type"))
-    return "notification";
+  if (has(payload, "notificationType")) return "notification";
   if (has(payload, "serverName")) return "preMcpToolCall";
   if (has(payload, "agentDescription")) return "subagentStart";
   if (has(payload, "agentName")) return "subagentStop";
@@ -154,33 +134,16 @@ export function inferEventName(
     return "preCompact";
   if (has(payload, "errorContext")) return "errorOccurred";
 
-  const toolName = has(payload, "toolName") || has(payload, "tool_name");
-  if (toolName) {
+  if (has(payload, "toolName")) {
     if (has(payload, "error")) return "postToolUseFailure";
-    if (has(payload, "toolResult") || has(payload, "tool_result"))
-      return "postToolUse";
+    if (has(payload, "toolResult")) return "postToolUse";
     return "preToolUse";
   }
 
   if (has(payload, "prompt")) return "userPromptSubmitted";
-  if (has(payload, "transcriptPath") || has(payload, "transcript_path"))
-    return "agentStop";
+  if (has(payload, "transcriptPath")) return "agentStop";
   if (has(payload, "reason")) return "sessionEnd";
   if (has(payload, "source") || has(payload, "initialPrompt"))
     return "sessionStart";
   return undefined;
-}
-
-/**
- * Detect which wire dialect a payload uses for a given event. A `hook_event_name`
- * field marks the VS Code / Open Plugins dialect — except for notification,
- * which always uses the native (mixed-case) payload, and for events that have no
- * compat mapper in the runtime.
- */
-export function detectDialect(
-  payload: Record<string, unknown>,
-  event: HookEventName,
-): HookDialect {
-  if (!VSCODE_CAPABLE_EVENTS.has(event)) return "native";
-  return has(payload, "hook_event_name") ? "vscode" : "native";
-}
+};

@@ -98,6 +98,21 @@ export const compatPostToolUse = {
   tool_result: { result_type: "success", text_result_for_llm: "a\nb" },
 };
 
+// Real VS Code Copilot Chat postToolUse: the result rides on `tool_response`
+// (a plain string), the tool is `run_in_terminal`, and extra id/path fields
+// tag along. Verified from a live capture.
+export const compatPostToolUseResponse = {
+  hook_event_name: "PostToolUse",
+  session_id: "s1",
+  timestamp: "2025-02-14T15:00:00.000Z",
+  cwd: "/repo",
+  tool_name: "run_in_terminal",
+  tool_input: { command: "npm run build" },
+  tool_response: "build complete",
+  tool_use_id: "toolu_123__vscode-1",
+  transcript_path: "/tmp/events.jsonl",
+};
+
 export const nativePreMcpToolCall = {
   sessionId: "s1",
   timestamp: 1739550000000,

@@ -7,6 +7,7 @@ They typecheck against the library in CI (`examples/tsconfig.json`).
 | --- | --- | --- |
 | [`context-injection/`](./context-injection) | `userPromptSubmitted` | Inject hidden context (git branch + a house rule) the model sees every turn. |
 | [`guardrail-deny/`](./guardrail-deny) | `preToolUse` | Fail-closed guardrail that denies dangerous shell commands before they run. |
+| [`before-after/`](./before-after) | `preToolUse` + `postToolUse` | One hook on both events: time each shell command before/after, and nudge the model when one runs slow. |
 | [`heartbeat/`](./heartbeat) | `agentStop` | **Flagship.** Stateless coverage gate: read the transcript, block the stop until the agent has swept every required source. |
 
 ## Running them

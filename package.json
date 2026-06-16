@@ -37,6 +37,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "build:hook": "bun build examples/before-after/pre-post.ts --target=bun --outfile=\"$HOME/.copilot/hooks/before-after-trace/trace.js\"",
     "typecheck": "tsc --noEmit",
     "typecheck:examples": "tsc -p examples/tsconfig.json",
     "lint": "biome check .",

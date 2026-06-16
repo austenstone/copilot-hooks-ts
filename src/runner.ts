@@ -55,13 +55,13 @@ export interface RunHooksOptions {
 
 const FAIL_CLOSED = new Set<HookEventName>(FAIL_CLOSED_EVENTS);
 
-function failClosedOutput(event: HookEventName): HookOutput | undefined {
+const failClosedOutput = (event: HookEventName): HookOutput | undefined => {
   if (event === "preToolUse")
     return denyTool("preToolUse hook errored; denying for safety");
   if (event === "permissionRequest")
     return denyPermission("permissionRequest hook errored; denying for safety");
   return undefined;
-}
+};
 
 /**
  * The ergonomic entry point: read + parse stdin, dispatch to the handler for the
@@ -73,10 +73,10 @@ function failClosedOutput(event: HookEventName): HookOutput | undefined {
  * cannot silently allow a gated action. All other events are fail-safe — errors
  * are routed to onError and swallowed without emitting.
  */
-export async function runHooks(
+export const runHooks = async (
   handlers: HookHandlers,
   options: RunHooksOptions = {},
-): Promise<void> {
+): Promise<void> => {
   const out = options.out ?? process.stdout;
   const failClosed = options.failClosed ?? true;
   const setExitCode =
@@ -120,4 +120,4 @@ export async function runHooks(
       if (deny) emit(deny, out);
     }
   }
-}
+};

@@ -8,14 +8,24 @@
 // Re-export the SDK's generated session-event union (type-only — zero runtime
 // weight) so transcript consumers share the exact runtime event types.
 export type { SessionEvent } from "@github/copilot-sdk";
+// Wire dialects (per-surface parsers: Copilot CLI native + VS Code)
+export {
+  DIALECTS,
+  type Dialect,
+  nativeDialect,
+  vscodeDialect,
+} from "./dialects/index.js";
 // Schemas + typed inputs
-export { compatSchemaByEvent } from "./compat.js";
+export {
+  compatSchemaByEvent,
+  detectDialect,
+  inferCompatEvent,
+} from "./dialects/vscode.js";
 export type { HookDialect, HookEventName } from "./events.js";
 // Events, categories, dialect detection
 export {
   CONTEXT_ONLY_EVENTS,
   DECISION_EVENTS,
-  detectDialect,
   EVENT_TO_PASCAL,
   FAIL_CLOSED_EVENTS,
   HOOK_EVENTS,

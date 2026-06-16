@@ -11,16 +11,16 @@ declare module "../src/tools.js" {
   }
 }
 
-function stdinFrom(payload: object): NodeJS.ReadStream {
+const stdinFrom = (payload: object): NodeJS.ReadStream => {
   return Readable.from([
     JSON.stringify(payload),
   ]) as unknown as NodeJS.ReadStream;
-}
+};
 
-function captureStdout(): {
+const captureStdout = (): {
   stream: NodeJS.WriteStream;
   written: () => string;
-} {
+} => {
   let buf = "";
   const stream = new Writable({
     write(chunk, _enc, cb) {
@@ -32,7 +32,7 @@ function captureStdout(): {
     stream: stream as unknown as NodeJS.WriteStream,
     written: () => buf,
   };
-}
+};
 
 describe("onTool / tool-scoped dispatch", () => {
   it("routes to the matching tool and decodes toolArgs into typed toolInput", async () => {
