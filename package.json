@@ -43,6 +43,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "lint:fix": "biome check --write .",
+    "prepare": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

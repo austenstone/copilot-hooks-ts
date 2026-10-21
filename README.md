@@ -1,12 +1,14 @@
 # copilot-hooks-ts
 
 [![CI](https://github.com/austenstone/copilot-hooks-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/austenstone/copilot-hooks-ts/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/copilot-hooks-ts.svg)](https://www.npmjs.com/package/copilot-hooks-ts)
 
 Type-safe **GitHub Copilot CLI hooks**. Write a handler, return a decision, done. The library handles the messy wire format (stdin parsing, event inference, dialect detection, zod validation) so you don't.
 
+Until the package has an npm release, install it from GitHub. Pin a commit or
+tag for reproducible builds:
+
 ```bash
-npm i copilot-hooks-ts
+npm install github:austenstone/copilot-hooks-ts#main
 ```
 
 ## Quick start
